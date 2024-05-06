@@ -36,21 +36,25 @@ jobs:
           toolchain: stable
 
       - name: Install macOS target
-        if: matrix.os == 'macos-latest'
-        run: rustup target add x86_64-apple-darwin
+        if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
+        run: rustup target add aarch64-apple-darwin
+
       - name: Install Windows MSVC target
         if: matrix.os == 'windows-latest'
         run: rustup target add x86_64-pc-windows-msvc
 
-      - name: Build release
+      - name: Build release - Linux
         if: matrix.os == 'ubuntu-latest'
-        run: rustup target add x86_64-unknown-linux-musl && cargo build --release --target x86_64-unknown-linux-musl
-      - name: Build release
+        run: cargo build --release --target x86_64-unknown-linux-musl
+      - name: Build release - Windows
         if: matrix.os == 'windows-latest'
         run: cargo build --release --target x86_64-pc-windows-msvc
-      - name: Build release
+      - name: Build release - macOS
         if: matrix.os == 'macos-latest'
         run: cargo build --release --target x86_64-apple-darwin
+      - name: Build release - ARM macOS
+        if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
+        run: cargo build --release --target aarch64-apple-darwin
 
       - name: Create Release
         id: create_release
@@ -63,7 +67,7 @@ jobs:
           draft: false
           prerelease: false
 
-      - name: Upload Release Asset - Linux AMD64
+      - name: Upload Release Asset - Linux
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,16 +76,7 @@ jobs:
           asset_path: ./target/x86_64-unknown-linux-musl/release/learn-rust
           asset_name: learn-rust-linux-amd64
           asset_content_type: application/octet-stream
-      - name: Upload Release Asset - Linux ARM64
-        uses: actions/upload-release-asset@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ steps.create_release.outputs.upload_url }}
-          asset_path: ./target/aarch64-unknown-linux-musl/release/learn-rust
-          asset_name: learn-rust-linux-arm64
-          asset_content_type: application/octet-stream
-      - name: Upload Release Asset - Windows AMD64
+      - name: Upload Release Asset - Windows
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -90,7 +85,7 @@ jobs:
           asset_path: ./target/x86_64-pc-windows-msvc/release/learn-rust.exe
           asset_name: learn-rust-windows-amd64.exe
           asset_content_type: application/octet-stream
-      - name: Upload Release Asset - macOS AMD64
+      - name: Upload Release Asset - macOS
         uses: actions/upload-release-asset@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -99,4 +94,12 @@ jobs:
           asset_path: ./target/x86_64-apple-darwin/release/learn-rust
           asset_name: learn-rust-macos-amd64
           asset_content_type: application/octet-stream
-
+      - name: Upload Release Asset - ARM macOS
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./target/aarch64-apple-darwin/release/learn-rust
+          asset_name: learn-rust-macos-arm64
+          asset_content_type: application/octet-stream
