@@ -35,13 +35,15 @@ jobs:
           profile: minimal
           toolchain: stable
 
-      - name: Install macOS target
+      - name: Install x86_64-apple-darwin target
         if: matrix.os == 'macos-latest' && matrix.arch == 'arm64'
-        run: rustup target add aarch64-apple-darwin
+        run: rustup target add x86_64-apple-darwin
 
-      - name: Install Windows MSVC target
+      - name: Install MSVC tools
         if: matrix.os == 'windows-latest'
-        run: rustup target add x86_64-pc-windows-msvc
+        run: |
+          choco install visualstudio2019buildtools visualstudio2019-workload-vctools -y
+          "C:\Program Files (x86)\Microsoft Visual Studio\2019\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
 
       - name: Build release - Linux
         if: matrix.os == 'ubuntu-latest'
