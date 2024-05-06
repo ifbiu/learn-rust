@@ -1,77 +1,67 @@
-name: 'release'
-
+name: build
 on:
-  push:
-    tags:
-      - '*'
-
-permissions:
-  contents: write
-  packages: write
+  workflow_dispatch: {}
 jobs:
-  release:
+  build:
+    name: build
+    runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        platform:
-          - release_for: linux-x86_64
-            os: ubuntu-20.04
-            target: x86_64-unknown-linux-gnu
-            bin: echo-server
-            name: echo-server-x86_64-unknown-linux-gnu
-            command: build
-
-          - release_for: Windows-x86_64
-            os: windows-latest
-            target: x86_64-pc-windows-msvc
-            bin: echo-server.exe
-            name: echo-server-Windows-x86_64.exe
-            command: build
-
-          - release_for: macOS-x86_64
-            os: macOS-latest
+        build: [linux, macos, windows]
+        include:
+          - build: linux
+            os: ubuntu-18.04
+            rust: nightly
+            target: x86_64-unknown-linux-musl
+            archive-name: sgf-render-linux.tar.gz
+          - build: macos
+            os: macos-latest
+            rust: nightly
             target: x86_64-apple-darwin
-            bin: echo-server
-            name: echo-server-Darwin-x86_64
-            command: build
-          - release_for: macOS-arm64
-            os: macOS-latest
-            target: aarch64-apple-darwin
-            bin: echo-server
-            name: echo-server-aarch64-apple-darwin
-            command: build
+            archive-name: sgf-render-macos.tar.gz
+          - build: windows
+            os: windows-2019
+            rust: nightly-x86_64-msvc
+            target: x86_64-pc-windows-msvc
+            archive-name: sgf-render-windows.7z
+      fail-fast: false
 
-
-
-    runs-on: ${{ matrix.platform.os }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Build binary
-        uses: houseabsolute/actions-rust-cross@v0
-        with:
-          command: ${{ matrix.platform.command }}
-          target: ${{ matrix.platform.target }}
-          args: "--release"
-          strip: true
-      - name: 'Login to GitHub Container Registry'
-        if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
-        uses: docker/login-action@v1
-        with:
-          registry: ghcr.io
-          username: ${{github.actor}}
-          password: ${{secrets.GITHUB_TOKEN}}
-      - name: Build the docker image
-        if: matrix.platform.target == 'x86_64-unknown-linux-gnu'
-        run: |-
-          cp target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }} ./docker/echo-server
-          cd docker/
-          docker build -t ghcr.io/lsk569937453/echo-server:${{ github.ref_name }} .
-          docker push ghcr.io/lsk569937453/echo-server:${{ github.ref_name }}
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      - name: Upload binaries to release
-        uses: svenstaro/upload-release-action@v2
+      - name: Install Rust
+        uses: actions-rs/toolchain@v1
         with:
-          repo_token: ${{ secrets.GITHUB_TOKEN }}
-          file: target/${{ matrix.platform.target }}/release/${{ matrix.platform.bin }}
-          asset_name: ${{ matrix.platform.name }}
-          tag: ${{ github.ref }}
+          toolchain: ${{ matrix.rust }}
+          profile: minimal
+          override: true
+          target: ${{ matrix.target }}
+
+      - name: Build binary
+        run: cargo build --verbose --release --target ${{ matrix.target }}
+        env:
+          RUST_BACKTRACE: 1
+
+      - name: Strip binary (linux and macos)
+        if: matrix.build == 'linux' || matrix.build == 'macos'
+        run: strip "target/${{ matrix.target }}/release/sgf-render"
+
+      - name: Build archive
+        shell: bash
+        run: |
+          mkdir archive
+          cp LICENSE README.md archive/
+          cd archive
+          if [ "${{ matrix.build }}" = "windows" ]; then
+            cp "../target/${{ matrix.target }}/release/sgf-render.exe" ./
+            7z a "${{ matrix.archive-name }}" LICENSE README.md sgf-render.exe
+          else
+            cp "../target/${{ matrix.target }}/release/sgf-render" ./
+            tar -czf "${{ matrix.archive-name }}" LICENSE README.md sgf-render
+          fi
+      - name: Upload archive
+        uses: actions/upload-artifact@v1
+        with:
+          name: ${{ matrix.archive-name }}
+          path: archive/${{ matrix.archive-name }}
